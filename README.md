@@ -360,3 +360,55 @@ erDiagram
 - **SCD2 Tables**: Historicity (valid_from/valid_to, is_current, version)
 - **Fact Tables**: Business events (append-only or SCD2)
 - **Calendar Dimension**: Time periods
+
+## Implementation Flow Diagram
+
+```mermaid
+graph TD
+    %% Initialization (one-time)
+    A[📅 dim_weeks] --> B[🏆 ligue_tiers_staging]
+    B --> C[🏆 ligue_tiers SCD2]
+    C --> D[⚡ event_types_staging]
+    D --> E[⚡ event_types SCD2]
+    E --> F[📚 lessons_staging]
+    F --> G[📚 lessons SCD2]
+
+    %% Weekly cycle - beginning of week
+    G --> H[👥 users_staging]
+    H --> I[👥 users SCD2]
+    I --> J[🏟️ ligue_instances_staging]
+    J --> K[🏟️ ligue_instances SCD2]
+    K --> L[📋 ligue_assignment_staging INSERT]
+    L --> M[📋 ligue_assignment SCD2]
+
+    %% Event generation and activity
+    M --> N[🎯 event_stream generation]
+    N --> O[📊 user_activity parsing]
+
+    %% End of week - UPDATE operations
+    O --> P[🔄 ligue_instances UPDATE]
+    P --> Q[📋 ligue_assignment_staging UPDATE]
+    Q --> R[📋 ligue_assignment SCD2 finalization]
+
+    %% Loop to next week
+    R --> S{More weeks?}
+    S -->|Yes| H
+    S -->|No| T[✅ Complete]
+
+    %% Styles
+    classDef staging fill:#ffeaa7,stroke:#fdcb6e,stroke-width:2px
+    classDef scd2 fill:#81ecec,stroke:#00cec9,stroke-width:2px
+    classDef process fill:#fd79a8,stroke:#e84393,stroke-width:2px
+    classDef decision fill:#a29bfe,stroke:#6c5ce7,stroke-width:2px
+
+    class B,D,F,H,J,L,Q staging
+    class C,E,G,I,K,M,R scd2
+    class N,O,P process
+    class S decision
+```
+
+### **Flow Legend:**
+- **🟡 Staging**: CDC data loading to staging tables
+- **🔵 SCD2**: Historical data processing with versioning
+- **🔴 Process**: Business logic execution (events, parsing, updates)
+- **🟣 Decision**: Flow control for weekly cycles
